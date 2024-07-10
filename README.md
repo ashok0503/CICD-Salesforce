@@ -1,2 +1,2 @@
 # CICD-Salesforce
- GITLAB Salesforce(SFDC)CICD setupDevOps
+ GITLAB Salesforce (SFDC) CICD setup DevOps
