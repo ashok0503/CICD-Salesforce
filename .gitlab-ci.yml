@@ -1,0 +1,49 @@
+#
+# Download the Salesforce CLI and install it
+#
+before_script:
+  # Set up environment variables
+  - export CLIURL=https://developer.salesforce.com/media/salesforce-cli/sfdx/channels/stable/sfdx-linux-x64.tar.xz
+  - export DEPLOYDIR=Deployment/src
+  - export TESTLEVEL=RunLocalTests
+
+
+  # Create sfdx directory
+  - mkdir ~/sfdx
+
+  # Install Salesforce CLI 
+  # By default, the script installs the current version of Salesforce CLI. To install the release candidate, set the DX_CLI_URL_CUSTOM local variable to the appropriate URL
+  - wget -qO- ${DX_CLI_URL_CUSTOM-$CLIURL} | tar xJ -C ~/sfdx --strip-components 1
+  - export PATH=~/sfdx/bin:$PATH
+
+  # Output CLI version and plug-in information
+  - sfdx --version
+  - sfdx plugins --core
+
+  # Decrypt server key
+  - openssl enc -nosalt -aes-256-cbc -d -in keys/server.key.enc -out keys/server.key -base64 -K $DECRYPTION_KEY -iv $DECRYPTION_IV
+#
+# The script step authenticates to the target deployment org and deploys the metadata
+#
+
+Deployment: 
+  script:
+  
+  # Authorize target deployment org
+  - sfdx auth:jwt:grant --instanceurl $ENDPOINT --clientid $CONSUMER_KEY --jwtkeyfile keys/server.key --username $USER_NAME --setalias CICD;
+  - TEST_RUN_VAR=$(if [ -s Deployment/TestClassName.txt ]; then echo "RunSpecifiedTests"; else echo "NoTestRun"; fi)
+  - echo $TEST_RUN_VAR
+  - TEST_CLASS_VALUE=$(cat Deployment/TestClassName.txt);
+  - echo $TEST_CLASS_VALUE
+  - if [ "$TEST_RUN_VAR" = "RunSpecifiedTests" ]; 
+    then
+        sfdx force:mdapi:deploy --wait 10 --deploydir $DEPLOYDIR --targetusername CICD --testlevel $TEST_RUN_VAR -r $TEST_CLASS_VALUE;
+    else 
+        sfdx force:mdapi:deploy --wait 10 --deploydir $DEPLOYDIR --targetusername CICD --testlevel $TEST_RUN_VAR;
+    fi
+      
+  # Deploy to target deployment org and run unit tests
+ 
+  # Example shows how to run a check-only deploy
+  #- sfdx force:mdapi:deploy --checkonly --wait 10 --deploydir $DEPLOYDIR --targetusername UAT --testlevel $TESTLEVEL
+
