@@ -1,0 +1,56 @@
+trigger:
+  - main
+
+variables:
+  sfdc.username: $(PROD_USERNAME)  # Use Azure Key Vault or secure variables
+  sfdc.password: $(PROD_PASSWORD)
+  sfdc.securityToken: $(PROD_SECURITY_TOKEN)
+  sfdc.loginUrl: login.salesforce.com
+
+stages:
+  - stage: Validate
+    displayName: Validate Deployment
+    jobs:
+      - job: Validate_Deployment
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          - task: SalesforceCliInstaller@6
+            displayName: 'Install Salesforce CLI'
+          - script: |
+              echo "Authorizing Salesforce Org..."
+              sfdx auth:jwt:grant \
+                --clientid $(CONNECTED_APP_CONSUMER_KEY) \
+                --jwtkeyfile server.key \
+                --username $(SANDBOX_USERNAME) \
+                --instanceurl $(SANDBOX_INSTANCE_URL)
+            displayName: 'Authenticate to Sandbox'
+          - script: |
+              echo "Validating deployment to Sandbox..."
+              sfdx force:source:deploy \
+                --checkonly \
+                --sourcepath force-app \
+                --testlevel RunLocalTests \
+                --targetusername $(SANDBOX_USERNAME)
+            displayName: 'Validate Deployment'
+
+  - stage: Deploy_to_Production
+    displayName: Deploy to Production
+    dependsOn: Validate
+    condition: succeeded()
+    jobs:
+      - job: Deploy_Production
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          - task: SalesforceCliInstaller@6
+            displayName: 'Install Salesforce CLI'
+          - script: |
+              echo "Deploying to Production..."
+              sfdx force:source:deploy \
+                --sourcepath force-app \
+                --testlevel RunLocalTests \
+                --targetusername $(PROD_USERNAME)
+            displayName: 'Deploy to Production'
